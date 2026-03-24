@@ -31,7 +31,9 @@ async function handleGenerate(request, env) {
       return jsonError("Please enter a prompt");
     }
 
-    // Call Workers AI with FLUX model
+    const accountId = "ba4047b60c7a96d74233b69c46831a61";
+    const apiToken = env.CF_API_TOKEN || "cfat_iYnIArpG1S1p1ejLNkN9JoFf94T8weVbBH8IfcUHef5691f5";
+
     const form = new FormData();
     form.append('prompt', prompt);
     form.append('width', width.toString());
@@ -41,17 +43,27 @@ async function handleGenerate(request, env) {
     const stream = formResponse.body;
     const contentType = formResponse.headers.get('content-type');
 
-    const response = await env.AI.run("@cf/black-forest-labs/flux-2-klein-9b", {
-      multipart: {
-        body: stream,
-        contentType: contentType
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-2-klein-9b`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiToken}`,
+          'Content-Type': contentType
+        },
+        body: stream
       }
-    });
+    );
 
-    // Return the generated image
+    const result = await response.json();
+
+    if (!result.success) {
+      return jsonError(result.errors?.[0]?.message || 'AI generation failed');
+    }
+
     return JSON.stringify({
       success: true,
-      image: `data:image/png;base64,${response.image}`
+      image: `data:image/png;base64,${result.result.image}`
     });
 
   } catch (e) {
